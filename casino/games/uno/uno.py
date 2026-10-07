@@ -13,7 +13,7 @@ class Uno:
         self.context = ctx
         self.view = UnoView(ctx)
 
-    #check if deck is empty and reshuffle from discard
+    # check if deck is empty and reshuffle from discard
     def check_deck(self, deck, disc) :
         if len(deck) == 0 :
             deck.extend(disc)
@@ -30,8 +30,8 @@ class Uno:
         unodeck_ = UnoDeck()
         current_deck = unodeck_.cards
         players: list[Player] = []
-        discard = [] # tracked so deck can be reshuffled when it runs out
-
+        # tracked discards so deck can be reshuffle when it runs out
+        discard = []
         self.view.display_topbar()
 
         # thinking hotseat multiplayer until socket stuff is implemented
@@ -45,9 +45,10 @@ class Uno:
             players.append(Player(i,name))
             self.view.display_topbar()
 
+        # opening hand: dealt cards are not counted as draws
         for i in range(7) :
             for j in players :
-                j.draw(current_deck)
+                j.draw(current_deck, reason="deal")
 
         #draws until first card on discard pile is regular number/color, not black, or card with special rules
         discard.append(self.draw(current_deck,discard))
@@ -68,9 +69,9 @@ class Uno:
             answer = self.view.prompt_draw_or_play()
 
             if (answer == "d" or answer == "draw") :
+                # Player.draw() already updates draws_taken
                 new_card = i.draw(current_deck)
                 self.view.show_drawn_card(new_card)
-                i.draws_taken += 1
 
             elif (answer == "p" or answer == "play") :
                 VALID_COLORS = ["red", "green", "blue", "yellow"]
@@ -109,21 +110,14 @@ class Uno:
                         answer = self.view.prompt_invalid_card()
                         if (answer == "draw" or answer == "d"):
                             new_card = i.draw(current_deck)
-                            i.draws_taken += 1
                             self.view.show_drawn_card(new_card)
                             break
                 #If actual valid card is chosen
+                # play_card() removes the card from the hand and updates
+                # every stat (cards played, +2, skip, reverse, wild, +4)
                 if valid_card:
-                    i.hand.remove(new_card)
-                    i.cards_played += 1
+                    i.play_card(new_card)
 
-                    if new_card.color == "wild":
-                        if new_card.rank == "wild_draw_4":
-                            i.draw4_played += 1
-                        else:
-                            i.wilds_played += 1
-
-                # i.hand.remove(new_card)
                 if len(i.hand) == 0:
                     continueGame = False
                     winner = i
@@ -139,8 +133,8 @@ class Uno:
                             direction *= -1
                     case "draw_2":
                         currentPlayerIndex = (currentPlayerIndex + direction) % len(players)
-                        players[currentPlayerIndex].draw(current_deck)
-                        players[currentPlayerIndex].draw(current_deck)
+                        for _ in range(2):
+                            players[currentPlayerIndex].draw(current_deck, reason="penalty")
                     case "wild":
                         new_color = self.view.prompt_wild_color()
                         new_card.color = new_color.lower()
@@ -148,10 +142,8 @@ class Uno:
                         new_color = self.view.prompt_wild_color_draw_4()
                         new_card.color = new_color
                         currentPlayerIndex = (currentPlayerIndex + direction) % len(players)
-                        players[currentPlayerIndex].draw(current_deck)
-                        players[currentPlayerIndex].draw(current_deck)
-                        players[currentPlayerIndex].draw(current_deck)
-                        players[currentPlayerIndex].draw(current_deck)
+                        for _ in range(4):
+                            players[currentPlayerIndex].draw(current_deck, reason="penalty")
                 discard.append(new_card)
             self.view.prompt_next_player()
             self.view.display_topbar()

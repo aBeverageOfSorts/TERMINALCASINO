@@ -16,21 +16,36 @@ class Player:
         self.draw4_played = 0
         self.skips_played = 0
         self.reverses_played = 0
-    
-    def draw(self, deck: list[UnoCard]) -> UnoCard:
+        self.penalty_cards = 0  
+
+    def draw(self, deck: list[UnoCard], reason: str = "draw") -> UnoCard:
+        """
+        Move a random card from `deck` into this player's hand.
+
+        `reason` controls which stat is updated:
+          - "draw":    the player chose to draw (counts toward draws_taken)
+          - "penalty": the card was forced by an opponent's +2 / +4
+          - "deal":    part of the opening hand (not counted as a stat)
+        """
+        if reason not in ("draw", "penalty", "deal"):
+            raise ValueError(f"Unknown draw reason: {reason}")
+
         c = random.choice(deck)
         self.hand.append(c)
         deck.remove(c)
-        #Track the draws taken
-        self.draws_taken += 1
+
+        if reason == "draw":
+            self.draws_taken += 1
+        elif reason == "penalty":
+            self.penalty_cards += 1
         return c
     
     def play_card(self, card:UnoCard) -> UnoCard:
         self.hand.remove(card)
-        #Track the cards played
+        #track the cards played
         self.cards_played += 1
 
-        #Add action to stats
+        #add action to stats
         if card.color == "wild":
             if card.rank == "wild_draw_4":
                 self.draw4_played += 1
