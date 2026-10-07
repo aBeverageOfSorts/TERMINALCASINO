@@ -12,6 +12,59 @@ WHICH_CARD_PROMPT2 = "Enter card suite and number. Ex: \"red 2\", \"red skip\", 
 WHICH_CARD_PROMPT3 = "For special cards, only enter \"+4\" or \"wild\""
 INVALID_CARD_MSG = "You can't play that card! Enter 'draw' if you would like to draw a card, otherwise press enter to select another card."
 
+QUIT_KEYS = {"q", "quit"}
+
+#(label, attribute on Player) for every tracked stat, in display order
+PLAYER_STATS = [
+    ("Cards played", "cards_played"),
+    ("Cards drawn", "draws_taken"),
+    ("Penalty cards taken", "penalty_cards"),
+    ("+2 played", "draw2_played"),
+    ("Skips played", "skips_played"),
+    ("Reverses played", "reverses_played"),
+    ("Wilds played", "wilds_played"),
+    ("+4 played", "draw4_played"),
+]
+
+
+def format_summary_table(players) -> str:
+    """Return a table with one row of stats per player."""
+    header = f"{'Player':<12} {'Left':>4} {'Played':>6} {'Drawn':>5} {'Penalty':>7} {'+2':>3} {'Skip':>4} {'Rev':>3} {'Wild':>4} {'+4':>3}"
+    lines = ["FINAL STATISTICS", "═" * len(header), header, "─" * len(header)]
+    for p in players:
+        lines.append(
+            f"{p.name[:12]:<12} {len(p.hand):>4} {p.cards_played:>6} {p.draws_taken:>5} "
+            f"{p.penalty_cards:>7} {p.draw2_played:>3} {p.skips_played:>4} "
+            f"{p.reverses_played:>3} {p.wilds_played:>4} {p.draw4_played:>3}"
+        )
+    lines.append("═" * len(header))
+    return "\n".join(lines)
+
+
+def format_player_page(player, winner, index: int, total: int) -> str:
+    """Return the detailed stats page for a single player."""
+    title = f"{player.name}  (player {index + 1} of {total})"
+    if player is winner:
+        title += "  ★ WINNER"
+    rows = [("Cards left in hand", len(player.hand))]
+    rows += [(label, getattr(player, attr)) for label, attr in PLAYER_STATS]
+
+    width = max(len(title), 36)  # fixed width so every page lines up
+    lines = [title, "─" * width]
+    for label, value in rows:
+        lines.append(f"{label + ':':<24}{value:>{width - 24}}")
+    lines.append("─" * width)
+    return "\n".join(lines)
+
+
+def next_page_index(index: int, key: str, total: int) -> int:
+    """Return the page to show after pressing `key`. Wraps around at both ends."""
+    if key in {"n", "next"}:
+        return (index + 1) % total
+    if key in {"p", "prev", "previous"}:
+        return (index - 1) % total
+    return index
+
 
 class UnoView:
     """
@@ -91,19 +144,25 @@ class UnoView:
         return cinput(INVALID_CARD_MSG).lower()
 
     def show_winner(self, winner, players) -> None:
+        """Show the summary table, then let the user page through each player's stats."""
         self.display_topbar()
-        cprint(f"{winner.name} is the winner!")
-        cprint("\n" + "═" * 34)
-        cprint("       FINAL STATISTICS")
-        cprint("═" * 34)
-        cprint(f"{'Player':<12}  Cards left   Played   Draws   Wild   +4")
-        cprint("-" * 50)
-        for p in players:
-            left = len(p.hand)
-            cprint(
-                f"{p.name:<12}  {left:>9}     {p.cards_played:>5}    {p.draws_taken:>5}    {p.wilds_played:>4}   {p.draw4_played:>3}")
-        cprint("═" * 50 + "\n")
-        cinput("Press enter when ready to exit")
+        cprint(f"{winner.name} is the winner!\n")
+        cprint(format_summary_table(players))
+        choice = cinput("Press [Enter] to view each player's stats or [q] to exit").lower()
+        if choice in QUIT_KEYS:
+            return
+        self.show_player_pages(winner, players)
+
+    def show_player_pages(self, winner, players) -> None:
+        """Page through one stats screen per player using [n]ext / [p]revious / [q]uit."""
+        index = 0
+        while True:
+            self.display_topbar()
+            cprint(format_player_page(players[index], winner, index, len(players)))
+            key = cinput("[n] next   [p] previous   [q] exit").lower()
+            if key in QUIT_KEYS:
+                return
+            index = next_page_index(index, key, len(players))
 
     def prompt_wild_color(self) -> str:
         new_color = cinput("Choose a color for the wild card (green, yellow, red, or blue)!").lower()
